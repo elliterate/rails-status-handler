@@ -1,0 +1,32 @@
+= Rails Status Handler
+
+== Abstract
+
+This is a custom request handler for the Mongrel web server.  Its purpose is to make available the status of the Rails handler for a given Mongrel instance.
+
+Mongrel is a multi-threaded web server, but due to a lack of thread safety in many of Rails' sub-systems, the Rails handler that ships with Mongrel wraps all calls to the Rails dispatcher in a mutex.  This means the Rails handler may only process one Rails request at a time.  Any requests that arrive while another request is being processed will be queued and then sequentially processed.  If any one request takes a long time, all queued requests will be delayed.
+
+With certain load balancing tools, it is possible to monitor the status of the individual nodes in a cluster by performing a request on them.  The tools may then opt to temporarily remove busy nodes from the cluster.  This custom handler makes it easier for such tools to monitor the status of the default Rails handler by providing a fast "/status" URI.  If the Rails handler is not currently processing a request, this custom handler will return a 200 OK, both as the HTTP status code and as the body of the response.  If the Rails handler is currently busy, this handler will return a 503 Service Unavailable.  By properly configuring your load balancing tools to take advantage of this handler, it is possible to ensure that only available nodes will receive requests.
+
+== Performance
+
+Because Mongrel is fast and because this handler is simple, it has virtually no impact on the performance of one's application.  A 2 GHz Xeon with 2 GB of memory was able to achieve approximately 1200 requests per second, at about 0.8 ms per request.
+
+== Installation
+
+This handler can be installed as a plugin for your Rails application, ideally residing in vendor/plugins.
+
+In lieu of script/server, one can test the inclusion of this handler by manually calling mongrel_rails:
+
+  $ mongrel_rails start -S vendor/plugins/rails_status_handler/lib/rails_status_handler.rb
+
+If using mongrel_cluster, simply add it to your cluster configuration file as the config_script option:
+
+  --- 
+  log_file: log/mongrel.log
+  port: "8000"
+  environment: production
+  address: 127.0.0.1
+  pid_file: tmp/pids/mongrel.pid
+  servers: 4
+  config_script: vendor/plugins/rails_status_handler/lib/rails_status_handler.rb
